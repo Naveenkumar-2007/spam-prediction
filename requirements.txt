@@ -1,0 +1,25 @@
+# Deep Learning Frameworks
+tensorflow==2.18.0
+keras==3.11.0
+numpy
+pandas
+
+# NLP Libraries
+nltk==3.8.1
+scikit-learn==1.6.1
+
+# Web Framework
+Flask
+gunicorn
+fastapi[standard]
+pydantic
+uvicorn
+
+# Utilities
+joblib
+pyyaml
+tqdm
+
+# Data Visualization
+matplotlib
+seaborn
