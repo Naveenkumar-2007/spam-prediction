@@ -8,6 +8,7 @@ from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 import logging
 import warnings
+import traceback
 
 # Suppress scikit-learn version warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")
@@ -45,11 +46,25 @@ class predict:
                 if not os.path.exists(self.preprocessing_path):
                     raise FileNotFoundError(f"Preprocessing file not found: {self.preprocessing_path}")
                 
-                # Load model
-                self.model = load_model(self.model_path)
-                logging.info(f"✅ Model loaded from: {self.model_path}")
+                logging.info("🔄 Loading TensorFlow model...")
+                
+                # Load model with error handling for deployment
+                try:
+                    # Suppress TensorFlow warnings in production
+                    import tensorflow as tf
+                    tf.get_logger().setLevel('ERROR')
+                    
+                    self.model = load_model(self.model_path, compile=False)
+                    # Compile the model for prediction
+                    self.model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+                    logging.info(f"✅ Model loaded and compiled from: {self.model_path}")
+                    
+                except Exception as tf_error:
+                    logging.error(f"TensorFlow model loading error: {tf_error}")
+                    raise tf_error
                 
                 # Load preprocessing
+                logging.info("🔄 Loading preprocessing objects...")
                 preprocessing_obj = joblib.load(self.preprocessing_path)
                 
                 # Validate preprocessing object
@@ -64,6 +79,7 @@ class predict:
                 
             except Exception as e:
                 logging.error(f"❌ Error loading model or preprocessing: {str(e)}")
+                logging.error(traceback.format_exc())
                 raise e
     
     def clean_text(self, text):

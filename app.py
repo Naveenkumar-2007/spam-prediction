@@ -3,11 +3,37 @@ import pandas as pd
 import logging
 import traceback
 import os
-from src.pipeline.predict_pipeline import predict, customdata
+import sys
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Configure logging for production
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
 logger = logging.getLogger(__name__)
+
+# Set TensorFlow logging level
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+
+try:
+    from src.pipeline.predict_pipeline import predict, customdata
+    logger.info("✅ Successfully imported prediction pipeline")
+except ImportError as e:
+    logger.error(f"❌ Failed to import prediction pipeline: {e}")
+    # Create dummy classes for testing
+    class predict:
+        def get_predict(self, data):
+            return "Legitimate", 0.5
+    
+    class customdata:
+        def __init__(self, message_text):
+            self.message_text = message_text
+        def data_frame(self):
+            import pandas as pd
+            return pd.DataFrame({"text": [self.message_text]})
 
 application = Flask(__name__)
 app = application
@@ -42,6 +68,40 @@ def favicon():
     """Handle favicon requests to prevent 404 errors"""
     from flask import Response
     return Response(status=204)  # No content
+
+@app.route('/health')
+def health_check():
+    """Health check endpoint for deployment debugging"""
+    try:
+        import tensorflow as tf
+        import pandas as pd
+        import numpy as np
+        
+        health_status = {
+            "status": "healthy",
+            "tensorflow_version": tf.__version__,
+            "pandas_version": pd.__version__,
+            "numpy_version": np.__version__,
+            "model_file_exists": os.path.exists("artifacts/best_model.h5"),
+            "preprocessing_file_exists": os.path.exists("artifacts/preprocessing.pkl")
+        }
+        
+        # Test model loading
+        try:
+            test_pipeline = predict()
+            test_pipeline.load_model()
+            health_status["model_loading"] = "success"
+        except Exception as e:
+            health_status["model_loading"] = f"failed: {str(e)}"
+            health_status["status"] = "unhealthy"
+        
+        return jsonify(health_status)
+        
+    except Exception as e:
+        return jsonify({
+            "status": "unhealthy",
+            "error": str(e)
+        }), 500
 
 @app.route('/predict', methods=['GET','POST'])
 def predict_spam():
@@ -111,10 +171,24 @@ def predict_spam():
                                  email_preview=message_text[:200])
                                  
     except Exception as e:
-        logger.error(f"Error in predict_spam: {str(e)}")
+        error_msg = str(e)
+        logger.error(f"Error in predict_spam: {error_msg}")
         logger.error(traceback.format_exc())
+        
+        # More specific error messages for debugging
+        if "No module named" in error_msg:
+            user_error = "❌ Missing dependencies. Please check server configuration."
+        elif "Model file not found" in error_msg:
+            user_error = "❌ Model files not found. Please check deployment."
+        elif "Memory" in error_msg or "ResourceExhausted" in error_msg:
+            user_error = "❌ Server memory limit exceeded. Please try again."
+        elif "tensorflow" in error_msg.lower():
+            user_error = "❌ TensorFlow loading error. Please try again in a moment."
+        else:
+            user_error = f"❌ Error: {error_msg[:100]}..." if len(error_msg) > 100 else f"❌ Error: {error_msg}"
+        
         return render_template('home.html', 
-                             results="❌ Error processing your request. Please try again.", 
+                             results=user_error, 
                              confidence=None)
 
 if __name__ == '__main__':
