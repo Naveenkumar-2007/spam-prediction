@@ -1,0 +1,20 @@
+# Requirements optimized for Python 3.13 and Render deployment
+# Using only the most essential packages with compatible versions
+
+# Core web framework
+Flask==3.0.3
+gunicorn==22.0.0
+
+# ML Framework - Latest stable for Python 3.13
+tensorflow==2.20.0
+numpy
+pandas
+
+# Essential ML utilities
+scikit-learn
+joblib
+PyYAML
+nltk
+
+# Optional: Remove if build fails
+# tqdm

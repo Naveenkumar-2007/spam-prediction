@@ -1,21 +1,15 @@
-# Deep Learning Frameworks - Compatible with Python 3.13
-tensorflow==2.16.2
-numpy==1.26.4
-pandas==2.2.2
-
-# NLP Libraries
-nltk==3.8.1
-scikit-learn==1.5.1
-
-# Web Framework
+# Core web framework
 Flask==3.0.3
 gunicorn==22.0.0
 
-# Utilities
-joblib==1.4.2
-PyYAML==6.0.1
-tqdm==4.66.4
+# Deep Learning - Use latest available for current Python version
+tensorflow>=2.20.0
+numpy
+pandas
 
-# Data Visualization (optional - comment out if not needed to reduce build time)
-# matplotlib==3.9.0
+# NLP and ML
+nltk
+scikit-learn
+joblib
+PyYAML
 # seaborn==0.13.2
