@@ -195,9 +195,13 @@ cython_debug/
 # MLflow
 mlruns/
 
-# DVC - Don't track large data files
+# DVC - Don't track large data files, BUT keep essential model files for deployment
 /artifacts/*.csv
-/artifacts/*.pkl
-/artifacts/*.h5
-/artifacts/*.png
-/artifacts/*.json
+/artifacts/*_sequences.pkl
+/artifacts/training_history.png
+/artifacts/confusion_matrix.png
+
+# Keep these essential files for deployment:
+# /artifacts/*.pkl (keep preprocessing.pkl and model_config.pkl)
+# /artifacts/*.h5 (keep best_model.h5)
+# /artifacts/*.json (keep metrics.json)
