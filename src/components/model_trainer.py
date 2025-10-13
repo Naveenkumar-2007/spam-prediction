@@ -9,6 +9,9 @@ from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 import matplotlib.pyplot as plt
 import seaborn as sns
+import mlflow
+import mlflow.tensorflow
+import yaml
 
 logging.basicConfig(level=logging.INFO)
 
@@ -42,6 +45,14 @@ class ModelTrainer:
     
     def __init__(self):
         self.artifacts_dir = "artifacts"
+        
+        # Load parameters from params.yaml
+        try:
+            with open('params.yaml', 'r') as f:
+                self.params = yaml.safe_load(f)
+        except FileNotFoundError:
+            logging.warning("params.yaml not found, using default parameters")
+            self.params = None
         
         # Check GPU availability
         gpus = tf.config.list_physical_devices('GPU')
@@ -154,7 +165,7 @@ class ModelTrainer:
     
     def train_model(self, train_seq_path, test_seq_path):
         """
-        Train LSTM model
+        Train LSTM model with MLflow tracking
         
         Args:
             train_seq_path (str): Path to training sequences
@@ -167,117 +178,192 @@ class ModelTrainer:
         logging.info("SMS SPAM DETECTION - MODEL TRAINING STARTED")
         logging.info("=" * 70)
         
-        try:
-            # Load sequences
-            train_data = joblib.load(train_seq_path)
-            test_data = joblib.load(test_seq_path)
-            
-            X_train = train_data['X']
-            y_train = train_data['y']
-            X_test = test_data['X']
-            y_test = test_data['y']
-            
-            logging.info(f"📊 Training samples: {X_train.shape[0]}")
-            logging.info(f"📊 Test samples: {X_test.shape[0]}")
-            
-            # Load preprocessing info
-            preprocessing_obj = joblib.load(
-                os.path.join(self.artifacts_dir, "preprocessing.pkl")
-            )
-            vocab_size = preprocessing_obj['vocab_size']
-            max_length = preprocessing_obj['max_length']
-            
-            # Build model
-            logging.info("\n🏗️  Building LSTM model...")
-            model = self.build_model(vocab_size, max_length)
-            
-            # Print model summary
-            logging.info("\n" + "=" * 70)
-            model.summary(print_fn=lambda x: logging.info(x))
-            logging.info("=" * 70)
-            
-            # Callbacks
-            early_stopping = EarlyStopping(
-                monitor='val_loss',
-                patience=3,
-                restore_best_weights=True,
-                verbose=1
-            )
-            
-            model_path = os.path.join(self.artifacts_dir, "best_model.h5")
-            checkpoint = ModelCheckpoint(
-                model_path,
-                monitor='val_accuracy',
-                save_best_only=True,
-                verbose=1
-            )
-            
-            # Train model
-            logging.info("\n🚀 Training model...")
-            history = model.fit(
-                X_train, y_train,
-                epochs=20,
-                batch_size=64,
-                validation_data=(X_test, y_test),
-                callbacks=[early_stopping, checkpoint],
-                verbose=1
-            )
-            
-            # Evaluate model
-            logging.info("\n📈 Evaluating model...")
-            test_loss, test_accuracy = model.evaluate(X_test, y_test, verbose=0)
-            
-            # Predictions
-            y_pred_proba = model.predict(X_test, verbose=0)
-            y_pred = (y_pred_proba > 0.5).astype(int).flatten()
-            
-            # Calculate metrics
-            precision = precision_score(y_test, y_pred)
-            recall = recall_score(y_test, y_pred)
-            f1 = f1_score(y_test, y_pred)
-            
-            logging.info("\n" + "=" * 70)
-            logging.info("📊 MODEL PERFORMANCE:")
-            logging.info(f"   Accuracy:  {test_accuracy:.4f} ({test_accuracy*100:.2f}%)")
-            logging.info(f"   Precision: {precision:.4f}")
-            logging.info(f"   Recall:    {recall:.4f}")
-            logging.info(f"   F1-Score:  {f1:.4f}")
-            logging.info(f"   Loss:      {test_loss:.4f}")
-            logging.info("=" * 70)
-            
-            # Plot training history
-            history_plot_path = os.path.join(self.artifacts_dir, "training_history.png")
-            self.plot_training_history(history, history_plot_path)
-            
-            # Plot confusion matrix
-            cm_plot_path = os.path.join(self.artifacts_dir, "confusion_matrix.png")
-            self.plot_confusion_matrix(y_test, y_pred, cm_plot_path)
-            
-            # Save model configuration
-            model_config = {
-                'vocab_size': vocab_size,
-                'max_length': max_length,
-                'accuracy': float(test_accuracy),
-                'precision': float(precision),
-                'recall': float(recall),
-                'f1_score': float(f1)
-            }
-            
-            config_path = os.path.join(self.artifacts_dir, "model_config.pkl")
-            joblib.dump(model_config, config_path)
-            
-            logging.info(f"\n💾 Model saved to: {model_path}")
-            logging.info(f"💾 Config saved to: {config_path}")
-            
-            logging.info("\n" + "=" * 70)
-            logging.info("✅ MODEL TRAINING COMPLETED SUCCESSFULLY")
-            logging.info("=" * 70 + "\n")
-            
-            return model_path
-            
-        except Exception as e:
-            logging.error(f"❌ Error in model training: {str(e)}")
-            raise e
+        # Get parameters
+        if self.params:
+            model_params = self.params.get('model_training', {})
+            mlflow_params = self.params.get('mlflow', {})
+        else:
+            model_params = {}
+            mlflow_params = {}
+        
+        # Set MLflow experiment
+        experiment_name = mlflow_params.get('experiment_name', 'SMS-Spam-Detection')
+        mlflow.set_experiment(experiment_name)
+        
+        # Start MLflow run
+        with mlflow.start_run(run_name=mlflow_params.get('run_name_prefix', 'lstm_model')):
+            try:
+                # Load sequences
+                train_data = joblib.load(train_seq_path)
+                test_data = joblib.load(test_seq_path)
+                
+                X_train = train_data['X']
+                y_train = train_data['y']
+                X_test = test_data['X']
+                y_test = test_data['y']
+                
+                logging.info(f"📊 Training samples: {X_train.shape[0]}")
+                logging.info(f"📊 Test samples: {X_test.shape[0]}")
+                
+                # Log data parameters
+                mlflow.log_param("train_samples", X_train.shape[0])
+                mlflow.log_param("test_samples", X_test.shape[0])
+                
+                # Load preprocessing info
+                preprocessing_obj = joblib.load(
+                    os.path.join(self.artifacts_dir, "preprocessing.pkl")
+                )
+                vocab_size = preprocessing_obj['vocab_size']
+                max_length = preprocessing_obj['max_length']
+                
+                # Log preprocessing parameters
+                mlflow.log_param("vocab_size", vocab_size)
+                mlflow.log_param("max_length", max_length)
+                
+                # Build model
+                logging.info("\n🏗️  Building LSTM model...")
+                model = self.build_model(vocab_size, max_length)
+                
+                # Log model parameters
+                mlflow.log_param("embedding_dim", model_params.get('embedding_dim', 128))
+                mlflow.log_param("lstm_units", model_params.get('lstm_units', 128))
+                mlflow.log_param("dense_units", model_params.get('dense_units', 64))
+                mlflow.log_param("dropout_rate_1", model_params.get('dropout_rate_1', 0.5))
+                mlflow.log_param("dropout_rate_2", model_params.get('dropout_rate_2', 0.3))
+                mlflow.log_param("optimizer", model_params.get('optimizer', 'adam'))
+                mlflow.log_param("loss", model_params.get('loss', 'binary_crossentropy'))
+                
+                # Log training parameters
+                epochs = model_params.get('epochs', 20)
+                batch_size = model_params.get('batch_size', 64)
+                mlflow.log_param("epochs", epochs)
+                mlflow.log_param("batch_size", batch_size)
+                
+                # Print model summary
+                logging.info("\n" + "=" * 70)
+                model.summary(print_fn=lambda x: logging.info(x))
+                logging.info("=" * 70)
+                
+                # Callbacks
+                early_stopping = EarlyStopping(
+                    monitor=model_params.get('early_stopping_monitor', 'val_loss'),
+                    patience=model_params.get('early_stopping_patience', 3),
+                    restore_best_weights=True,
+                    verbose=1
+                )
+                
+                model_path = os.path.join(self.artifacts_dir, "best_model.h5")
+                checkpoint = ModelCheckpoint(
+                    model_path,
+                    monitor=model_params.get('checkpoint_monitor', 'val_accuracy'),
+                    save_best_only=model_params.get('save_best_only', True),
+                    verbose=1
+                )
+                
+                # Train model
+                logging.info("\n🚀 Training model...")
+                history = model.fit(
+                    X_train, y_train,
+                    epochs=epochs,
+                    batch_size=batch_size,
+                    validation_data=(X_test, y_test),
+                    callbacks=[early_stopping, checkpoint],
+                    verbose=1
+                )
+                
+                # Log training history
+                for epoch in range(len(history.history['accuracy'])):
+                    mlflow.log_metric("train_accuracy", history.history['accuracy'][epoch], step=epoch)
+                    mlflow.log_metric("train_loss", history.history['loss'][epoch], step=epoch)
+                    mlflow.log_metric("val_accuracy", history.history['val_accuracy'][epoch], step=epoch)
+                    mlflow.log_metric("val_loss", history.history['val_loss'][epoch], step=epoch)
+                
+                # Evaluate model
+                logging.info("\n📈 Evaluating model...")
+                test_loss, test_accuracy = model.evaluate(X_test, y_test, verbose=0)
+                
+                # Predictions
+                y_pred_proba = model.predict(X_test, verbose=0)
+                y_pred = (y_pred_proba > 0.5).astype(int).flatten()
+                
+                # Calculate metrics
+                precision = precision_score(y_test, y_pred)
+                recall = recall_score(y_test, y_pred)
+                f1 = f1_score(y_test, y_pred)
+                
+                # Log final metrics
+                mlflow.log_metric("test_accuracy", test_accuracy)
+                mlflow.log_metric("test_loss", test_loss)
+                mlflow.log_metric("precision", precision)
+                mlflow.log_metric("recall", recall)
+                mlflow.log_metric("f1_score", f1)
+                
+                logging.info("\n" + "=" * 70)
+                logging.info("📊 MODEL PERFORMANCE:")
+                logging.info(f"   Accuracy:  {test_accuracy:.4f} ({test_accuracy*100:.2f}%)")
+                logging.info(f"   Precision: {precision:.4f}")
+                logging.info(f"   Recall:    {recall:.4f}")
+                logging.info(f"   F1-Score:  {f1:.4f}")
+                logging.info(f"   Loss:      {test_loss:.4f}")
+                logging.info("=" * 70)
+                
+                # Plot training history
+                history_plot_path = os.path.join(self.artifacts_dir, "training_history.png")
+                self.plot_training_history(history, history_plot_path)
+                mlflow.log_artifact(history_plot_path)
+                
+                # Plot confusion matrix
+                cm_plot_path = os.path.join(self.artifacts_dir, "confusion_matrix.png")
+                self.plot_confusion_matrix(y_test, y_pred, cm_plot_path)
+                mlflow.log_artifact(cm_plot_path)
+                
+                # Save model configuration
+                model_config = {
+                    'vocab_size': vocab_size,
+                    'max_length': max_length,
+                    'accuracy': float(test_accuracy),
+                    'precision': float(precision),
+                    'recall': float(recall),
+                    'f1_score': float(f1)
+                }
+                
+                config_path = os.path.join(self.artifacts_dir, "model_config.pkl")
+                joblib.dump(model_config, config_path)
+                
+                # Save metrics to JSON for DVC
+                import json
+                metrics_json_path = os.path.join(self.artifacts_dir, "metrics.json")
+                with open(metrics_json_path, 'w') as f:
+                    json.dump({
+                        'accuracy': float(test_accuracy),
+                        'precision': float(precision),
+                        'recall': float(recall),
+                        'f1_score': float(f1),
+                        'loss': float(test_loss)
+                    }, f, indent=4)
+                
+                # Log model to MLflow
+                mlflow.tensorflow.log_model(model, "model")
+                
+                # Log artifacts
+                mlflow.log_artifact(model_path)
+                mlflow.log_artifact(config_path)
+                mlflow.log_artifact(metrics_json_path)
+                
+                logging.info(f"\n💾 Model saved to: {model_path}")
+                logging.info(f"💾 Config saved to: {config_path}")
+                logging.info(f"💾 Metrics saved to: {metrics_json_path}")
+                logging.info(f"📊 MLflow tracking URI: {mlflow.get_tracking_uri()}")
+                
+                logging.info("\n" + "=" * 70)
+                logging.info("✅ MODEL TRAINING COMPLETED SUCCESSFULLY")
+                logging.info("=" * 70 + "\n")
+                
+                return model_path
+                
+            except Exception as e:
+                logging.error(f"❌ Error in model training: {str(e)}")
+                raise e
 
 if __name__ == "__main__":
     from src.components.data_ingestion import DataIngestion

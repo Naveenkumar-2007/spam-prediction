@@ -1,0 +1,49 @@
+# DVC Parameters Configuration for SMS Spam Detection
+# This file contains all hyperparameters and configurations
+
+data_ingestion:
+  raw_data_path: "spam.csv"
+  artifacts_dir: "artifacts"
+  test_size: 0.2
+  random_state: 42
+
+data_transformation:
+  max_words: 10000  # Vocabulary size
+  max_length: 100   # Maximum sequence length
+  oov_token: "<OOV>"  # Out of vocabulary token
+
+model_training:
+  # Model architecture
+  embedding_dim: 128
+  lstm_units: 128
+  dense_units: 64
+  dropout_rate_1: 0.5
+  dropout_rate_2: 0.3
+  
+  # Training parameters
+  epochs: 20
+  batch_size: 64
+  validation_split: 0.2
+  
+  # Early stopping
+  early_stopping_patience: 3
+  early_stopping_monitor: "val_loss"
+  
+  # Model checkpoint
+  save_best_only: True
+  checkpoint_monitor: "val_accuracy"
+  
+  # Optimizer
+  optimizer: "adam"
+  learning_rate: 0.001
+  loss: "binary_crossentropy"
+  
+# MLflow configuration
+mlflow:
+  experiment_name: "SMS-Spam-Detection"
+  run_name_prefix: "lstm_model"
+  
+# DagsHub configuration (will be set via environment variables)
+dagshub:
+  repo_owner: "Naveenkumar-2007"
+  repo_name: "spam-prediction"

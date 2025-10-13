@@ -1,0 +1,44 @@
+stages:
+  data_ingestion:
+    cmd: python -c "from src.components.data_ingestion import DataIngestion; di = DataIngestion(); di.initiate_data_ingestion()"
+    deps:
+      - spam.csv
+    params:
+      - data_ingestion.test_size
+      - data_ingestion.random_state
+    outs:
+      - artifacts/raw.csv
+      - artifacts/train.csv
+      - artifacts/test.csv
+
+  data_transformation:
+    cmd: python -c "from src.components.data_transform import DataTransform; dt = DataTransform(); dt.initiate_data_transformation('artifacts/train.csv', 'artifacts/test.csv')"
+    deps:
+      - artifacts/train.csv
+      - artifacts/test.csv
+    params:
+      - data_transformation.max_words
+      - data_transformation.max_length
+    outs:
+      - artifacts/train_sequences.pkl
+      - artifacts/test_sequences.pkl
+      - artifacts/preprocessing.pkl
+
+  model_training:
+    cmd: python -c "from src.components.model_trainer import ModelTrainer; trainer = ModelTrainer(); trainer.initiate_model_training('artifacts/train_sequences.pkl', 'artifacts/test_sequences.pkl')"
+    deps:
+      - artifacts/train_sequences.pkl
+      - artifacts/test_sequences.pkl
+    params:
+      - model_training.embedding_dim
+      - model_training.lstm_units
+      - model_training.dense_units
+      - model_training.dropout_rate_1
+      - model_training.dropout_rate_2
+      - model_training.epochs
+      - model_training.batch_size
+    outs:
+      - artifacts/best_model.h5
+    metrics:
+      - artifacts/metrics.json:
+          cache: false

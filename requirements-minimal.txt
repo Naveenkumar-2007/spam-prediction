@@ -1,0 +1,17 @@
+# Minimal requirements for Render deployment
+# Core web framework
+Flask==3.0.3
+gunicorn==22.0.0
+
+# Core ML libraries - CPU only for faster builds
+tensorflow-cpu==2.15.0
+numpy==1.24.4
+pandas==2.0.3
+
+# NLP and ML utilities
+nltk==3.8.1
+scikit-learn==1.3.2
+joblib==1.3.2
+
+# Utilities
+PyYAML==6.0.1
