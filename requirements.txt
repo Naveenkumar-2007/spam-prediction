@@ -12,4 +12,7 @@ nltk
 scikit-learn
 joblib
 PyYAML
+
+# Additional utilities for deployment
+Werkzeug>=2.0.0
 # seaborn==0.13.2
