@@ -100,7 +100,35 @@ if (spamForm) {
             }
 
             if (data.error) {
-                showError(data.message || 'An error occurred during prediction');
+                // If server provided a traceback (when debugging), show concise message
+                let userMessage = data.message || 'An error occurred during prediction';
+                showError(userMessage);
+
+                // If traceback present, append a collapsible details block for debugging
+                if (data.traceback) {
+                    try {
+                        const errorMessageEl = document.getElementById('errorMessage');
+                        if (errorMessageEl) {
+                            const details = document.createElement('details');
+                            details.style.marginTop = '12px';
+                            const summary = document.createElement('summary');
+                            summary.textContent = 'Show debug trace';
+                            summary.style.cursor = 'pointer';
+                            details.appendChild(summary);
+
+                            const pre = document.createElement('pre');
+                            pre.style.whiteSpace = 'pre-wrap';
+                            pre.style.maxHeight = '240px';
+                            pre.style.overflow = 'auto';
+                            pre.textContent = data.traceback;
+                            details.appendChild(pre);
+
+                            errorMessageEl.appendChild(details);
+                        }
+                    } catch (domErr) {
+                        console.warn('Could not render traceback in UI', domErr);
+                    }
+                }
             } else {
                 showResult(data);
             }
