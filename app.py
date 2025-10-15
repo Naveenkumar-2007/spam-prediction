@@ -85,16 +85,25 @@ def predict_spam():
         
     except Exception as e:
         logging.error(f"Prediction error: {str(e)}")
-        logging.error(traceback.format_exc())
+        tb = traceback.format_exc()
+        logging.error(tb)
+
         # In production we return a generic message. When debugging is enabled
-        # (set environment variable DEBUG_PREDICT_ERRORS=1) return the error message
+        # via environment variable DEBUG_PREDICT_ERRORS (truthy values: 1,true,yes),
+        # include the exception message and traceback in the JSON response to
+        # make diagnosing Render deployment errors easier.
         generic_msg = 'An error occurred during prediction. Please try again.'
-        if os.environ.get('DEBUG_PREDICT_ERRORS') == '1':
-            # Provide concise error to help debugging (avoid full trace in response)
-            return jsonify({
+        debug_val = os.environ.get('DEBUG_PREDICT_ERRORS', '')
+        debug_truthy = str(debug_val).lower() in ('1', 'true', 'yes', 'on')
+
+        if debug_truthy:
+            payload = {
                 'error': True,
-                'message': str(e)
-            }), 500
+                'message': str(e),
+                'traceback': tb
+            }
+            return jsonify(payload), 500
+
         return jsonify({
             'error': True,
             'message': generic_msg
@@ -108,7 +117,8 @@ def health_check():
         predictor.load_model()
         return jsonify({
             'status': 'healthy',
-            'model_loaded': predictor.model is not None
+            'model_loaded': predictor.model is not None,
+            'fallback': getattr(predictor, 'fallback', False)
         })
     except Exception as e:
         return jsonify({
