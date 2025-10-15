@@ -74,18 +74,40 @@ if (spamForm) {
                 },
                 body: JSON.stringify({ message: message })
             });
-            
-            const data = await response.json();
-            
+
+            // If response is not OK, try to read JSON error message, otherwise show status
+            if (!response.ok) {
+                let serverMessage = '';
+                try {
+                    const errData = await response.json();
+                    serverMessage = errData && errData.message ? ` - ${errData.message}` : '';
+                } catch (jsonErr) {
+                    // response wasn't JSON
+                    serverMessage = '';
+                }
+                showError(`Server returned ${response.status}${serverMessage}`);
+                return;
+            }
+
+            // Parse successful JSON
+            let data;
+            try {
+                data = await response.json();
+            } catch (parseErr) {
+                console.error('Invalid JSON from server', parseErr);
+                showError('Received invalid response from server.');
+                return;
+            }
+
             if (data.error) {
                 showError(data.message || 'An error occurred during prediction');
             } else {
                 showResult(data);
             }
-            
+
         } catch (error) {
             console.error('Prediction error:', error);
-            showError('Failed to connect to the server. Please try again.');
+            showError('Failed to connect to the server. Please check your network and try again.');
         }
     });
 }

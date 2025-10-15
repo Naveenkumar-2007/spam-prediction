@@ -5,6 +5,7 @@ Enterprise-grade spam detection powered by advanced AI
 
 from flask import Flask, render_template, request, jsonify
 from src.pipeline.predict_pipeline import predict, customdata
+import os
 import logging
 import traceback
 import secrets
@@ -85,9 +86,18 @@ def predict_spam():
     except Exception as e:
         logging.error(f"Prediction error: {str(e)}")
         logging.error(traceback.format_exc())
+        # In production we return a generic message. When debugging is enabled
+        # (set environment variable DEBUG_PREDICT_ERRORS=1) return the error message
+        generic_msg = 'An error occurred during prediction. Please try again.'
+        if os.environ.get('DEBUG_PREDICT_ERRORS') == '1':
+            # Provide concise error to help debugging (avoid full trace in response)
+            return jsonify({
+                'error': True,
+                'message': str(e)
+            }), 500
         return jsonify({
             'error': True,
-            'message': 'An error occurred during prediction. Please try again.'
+            'message': generic_msg
         }), 500
 
 @app.route('/health')
